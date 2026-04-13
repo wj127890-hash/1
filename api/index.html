@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Firstay 1000</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
+        body { font-family: 'Noto Sans KR', sans-serif; background-color: #f9fafb; margin: 0; touch-action: manipulation; }
+        .checkout-badge { font-size: 8px; font-weight: 900; margin-top: 2px; }
+    </style>
+</head>
+<body>
+    <div id="app" class="max-w-md mx-auto min-h-screen pb-10">
+        <div class="bg-orange-600 text-white p-10 rounded-b-[40px] shadow-lg text-center relative">
+            <div class="flex justify-between items-center px-4">
+                <button onclick="changeMonth(-1)" class="p-2"><i class="fas fa-chevron-left text-2xl"></i></button>
+                <h2 id="month-title" class="text-3xl font-black">2026년 4월</h2>
+                <button onclick="changeMonth(1)" class="p-2"><i class="fas fa-chevron-right text-2xl"></i></button>
+            </div>
+            <p id="status-text" class="mt-2 text-orange-200 text-xs font-bold tracking-widest italic text-center">동기화 완료</p>
+        </div>
+        <div class="p-6">
+            <div class="grid grid-cols-7 mb-6 text-center text-xs font-black text-gray-400">
+                <div class="text-red-500">일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div class="text-blue-500">토</div>
+            </div>
+            <div id="calendar-grid" class="grid grid-cols-7 gap-3"></div>
+        </div>
+        <div id="memo-modal" class="fixed inset-0 bg-black/70 hidden flex items-end z-50">
+            <div class="bg-white w-full rounded-t-[40px] p-8 pb-12 shadow-2xl">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 id="memo-date" class="text-2xl font-bold">날짜 메모</h3>
+                    <button onclick="closeModal()" class="text-3xl">&times;</button>
+                </div>
+                <p class="text-orange-600 font-black mb-2 italic text-sm">"혜빈님께 전달드립니다"</p>
+                <textarea id="memo-input" class="w-full h-48 p-5 border-2 border-orange-100 rounded-[25px] outline-none focus:border-orange-500 text-lg"></textarea>
+                <button id="save-btn" onclick="saveMemo()" class="w-full bg-orange-600 text-white font-black py-5 rounded-[25px] mt-6 text-xl">저장하기</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        // ⚠️ 1단계에서 복사한 주소를 여기에 붙여넣으세요!
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwTFKZ-mzf975US34XS0PxMkFtnactXf-tBB6ctFkZvESMlxa1iui8-tVIDD71Y_IPGzw/exec";
+        
+        let currentMonth = new Date();
+        let checkoutDates = [];
+        let allMemos = {};
+
+        async function init() {
+            renderCalendar(); 
+            try {
+                const [calRes, memoRes] = await Promise.all([
+                    fetch('/api/calendar').then(r => r.json()),
+                    fetch(WEB_APP_URL + "?t=" + Date.now()).then(r => r.json())
+                ]);
+                checkoutDates = calRes;
+                allMemos = memoRes;
+                renderCalendar();
+            } catch (e) { console.log(e); }
+        }
+
+        function renderCalendar() {
+            const grid = document.getElementById('calendar-grid');
+            const title = document.getElementById('month-title');
+            grid.innerHTML = '';
+            const year = currentMonth.getFullYear();
+            const month = currentMonth.getMonth();
+            title.innerText = `${year}년 ${month + 1}월`;
+            const firstDay = new Date(year, month, 1).getDay();
+            const lastDate = new Date(year, month + 1, 0).getDate();
+            for (let i = 0; i < firstDay; i++) grid.appendChild(document.createElement('div'));
+            for (let d = 1; d <= lastDate; d++) {
+                const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                const isCheckout = checkoutDates.includes(dateStr);
+                const memo = allMemos[dateStr];
+                const dayEl = document.createElement('div');
+                dayEl.className = `relative h-16 flex items-center justify-center rounded-2xl shadow-sm text-lg font-bold cursor-pointer ${isCheckout ? 'bg-orange-500 text-white' : 'bg-white text-gray-700'}`;
+                dayEl.innerHTML = `<div class="flex flex-col items-center"><span>${d}</span>${isCheckout ? '<span class="checkout-badge">CHECKOUT</span>' : ''}${memo ? '<div class="w-1.5 h-1.5 bg-orange-300 rounded-full mt-0.5"></div>' : ''}</div>`;
+                dayEl.onclick = () => openModal(dateStr);
+                grid.appendChild(dayEl);
+            }
+        }
+
+        let selectedDate = "";
+        function openModal(dateStr) {
+            selectedDate = dateStr;
+            const parts = dateStr.split('-');
+            document.getElementById('memo-date').innerText = `${parseInt(parts[1])}월 ${parseInt(parts[2])}일`;
+            document.getElementById('memo-input').value = allMemos[dateStr] || "";
+            document.getElementById('memo-modal').classList.remove('hidden');
+        }
+
+        async function saveMemo() {
+            const content = document.getElementById('memo-input').value;
+            const btn = document.getElementById('save-btn');
+            btn.innerText = "저장 중..."; btn.disabled = true;
+            try {
+                await fetch(WEB_APP_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ date: selectedDate, content: content }) });
+                allMemos[selectedDate] = content;
+                renderCalendar();
+                setTimeout(() => closeModal(), 300);
+            } catch (e) { alert("저장 실패"); } finally { btn.innerText = "저장하기"; btn.disabled = false; }
+        }
+
+        function closeModal() { document.getElementById('memo-modal').classList.add('hidden'); }
+        function changeMonth(diff) { currentMonth.setMonth(currentMonth.getMonth() + diff); renderCalendar(); init(); }
+        init();
+    </script>
+</body>
+</html>
